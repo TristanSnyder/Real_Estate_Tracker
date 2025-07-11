@@ -1,3 +1,4 @@
+# Add railway.json to your GitHub repo
 cat > railway.json << 'EOF'
 {
   "$schema": "https://railway.app/railway.schema.json",
