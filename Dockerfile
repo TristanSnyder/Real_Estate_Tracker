@@ -1,4 +1,3 @@
-# Add this to your existing Dockerfile
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -6,18 +5,22 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y gcc g++ && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Copy requirements and install
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy app code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p /app/chroma_db /app/logs
+# Create directories
+RUN mkdir -p chroma_db logs
 
-# Expose port (Railway will set PORT env var)
+# Railway requires this format for PORT
 EXPOSE $PORT
 
-# Start command (Railway compatible)
-CMD python -m uvicorn real_estate_rag_system:app --host 0.0.0.0 --port $PORT
+# Health check (optional but helpful)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:$PORT/health || exit 1
+
+# Start command - make sure it binds to 0.0.0.0
+CMD uvicorn real_estate_rag_system:app --host 0.0.0.0 --port $PORT --workers 1
