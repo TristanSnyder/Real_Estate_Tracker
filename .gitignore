@@ -1,3 +1,13 @@
+# Environment variables (NEVER commit these!)
+.env
+.env.local
+.env.production
+
+# Data directories
+chroma_db/
+logs/
+data/
+backups/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
