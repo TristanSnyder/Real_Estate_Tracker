@@ -17,9 +17,9 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine, text
 import asyncio
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import Chroma
-from langchain.document_loaders import DataFrameLoader
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain_community.document_loaders import DataFrameLoader
 from langchain.schema import Document
 import re
 from collections import defaultdict
@@ -27,41 +27,37 @@ import pickle
 from pathlib import Path
 import os
 import uvicorn
-import torch
-from transformers import (
-    AutoTokenizer, 
-    AutoModelForCausalLM,
-    T5ForConditionalGeneration,
-    T5Tokenizer
-)
+import openai
+from openai import OpenAI
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configure Hugging Face authentication
-def setup_huggingface_auth():
-    """Setup Hugging Face authentication using environment variables"""
-    hf_token = os.getenv('HUGGINGFACE_HUB_TOKEN') or os.getenv('HF_TOKEN')
+# Configure OpenAI authentication
+def setup_openai_auth():
+    """Setup OpenAI authentication using environment variables"""
+    openai_api_key = os.getenv('OPENAI_API_KEY')
     
-    if hf_token:
-        logger.info("✅ Hugging Face token found, setting up authentication")
-        # Login to Hugging Face Hub
+    if openai_api_key:
+        logger.info("✅ OpenAI API key found, setting up authentication")
         try:
-            from huggingface_hub import login
-            login(token=hf_token)
-            logger.info("✅ Successfully authenticated with Hugging Face Hub")
-        except ImportError:
-            logger.warning("huggingface_hub not installed, using token as environment variable")
-            os.environ['HUGGINGFACE_HUB_TOKEN'] = hf_token
+            # Initialize OpenAI client
+            client = OpenAI(api_key=openai_api_key)
+            # Test the connection with a simple request
+            client.models.list()
+            logger.info("✅ Successfully authenticated with OpenAI API")
+            return client
         except Exception as e:
-            logger.error(f"Failed to authenticate with Hugging Face: {e}")
+            logger.error(f"Failed to authenticate with OpenAI: {e}")
+            return None
     else:
-        logger.warning("⚠️ No Hugging Face token found. Some models may not be accessible.")
-        logger.info("💡 Set HUGGINGFACE_HUB_TOKEN or HF_TOKEN environment variable for authentication")
+        logger.warning("⚠️ No OpenAI API key found. LLM features will be disabled.")
+        logger.info("💡 Set OPENAI_API_KEY environment variable for LLM functionality")
+        return None
 
-# Setup HF authentication at startup
-setup_huggingface_auth()
+# Setup OpenAI authentication at startup
+openai_client = setup_openai_auth()
 
 # Initialize FastAPI app
 app = FastAPI(title="Real Estate RAG System", version="2.0.0")
@@ -135,79 +131,84 @@ class QueryResult:
 
 # LLM Configuration
 class LLMConfig:
-    """Configuration for different LLM options"""
-    # Smaller, faster model (recommended for most use cases)
-    FLAN_T5_BASE = {
-        "model_name": "google/flan-t5-base",
-        "model_type": "t5",
-        "max_length": 512,
-        "device": "cuda" if torch.cuda.is_available() else "cpu"
+    """Configuration for different OpenAI models"""
+    # Fast and cost-effective model (recommended for most use cases)
+    GPT_3_5_TURBO = {
+        "model_name": "gpt-3.5-turbo",
+        "max_tokens": 512,
+        "temperature": 0.7
     }
     
-    # Larger model for better quality
-    FLAN_T5_LARGE = {
-        "model_name": "google/flan-t5-large",
-        "model_type": "t5",
-        "max_length": 512,
-        "device": "cuda" if torch.cuda.is_available() else "cpu"
+    # More powerful model for complex queries
+    GPT_4 = {
+        "model_name": "gpt-4",
+        "max_tokens": 512,
+        "temperature": 0.7
+    }
+    
+    # Latest model with improved performance
+    GPT_4_TURBO = {
+        "model_name": "gpt-4-turbo-preview",
+        "max_tokens": 512,
+        "temperature": 0.7
     }
 
-class TransformersLLM:
-    """Wrapper for Hugging Face Transformers models"""
+class OpenAILLM:
+    """Wrapper for OpenAI API models"""
     
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: Dict[str, Any] = None, client: OpenAI = None):
         if config is None:
-            config = LLMConfig.FLAN_T5_BASE
+            config = LLMConfig.GPT_3_5_TURBO
         
         self.config = config
-        self.device = config["device"]
+        self.client = client or openai_client
         
-        logger.info(f"Loading {config['model_name']} on {self.device}...")
+        logger.info(f"Initializing OpenAI LLM with {config['model_name']}...")
         
-        try:
-            if config["model_type"] == "t5":
-                self.tokenizer = T5Tokenizer.from_pretrained(config["model_name"])
-                self.model = T5ForConditionalGeneration.from_pretrained(
-                    config["model_name"],
-                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32
-                ).to(self.device)
-            
-            logger.info("✅ LLM loaded successfully")
-            self.available = True
-        except Exception as e:
-            logger.error(f"Failed to load LLM: {e}")
+        if self.client:
+            try:
+                # Test the connection with a simple request
+                self.client.models.list()
+                logger.info("✅ OpenAI LLM initialized successfully")
+                self.available = True
+            except Exception as e:
+                logger.error(f"Failed to initialize OpenAI LLM: {e}")
+                self.available = False
+        else:
+            logger.warning("OpenAI client not available")
             self.available = False
-            self.model = None
-            self.tokenizer = None
     
-    def generate(self, prompt: str, max_new_tokens: int = 256, temperature: float = 0.7) -> str:
-        """Generate text from prompt"""
+    def generate(self, prompt: str, max_tokens: int = None, temperature: float = None) -> str:
+        """Generate text from prompt using OpenAI API"""
         if not self.available:
-            return "LLM not available - returning mock response"
+            return "OpenAI LLM not available - check your API key"
         
         try:
-            inputs = self.tokenizer(
-                prompt, 
-                return_tensors="pt", 
-                truncation=True, 
-                max_length=self.config["max_length"]
-            ).to(self.device)
+            # Use config defaults if not specified
+            max_tokens = max_tokens or self.config.get("max_tokens", 512)
+            temperature = temperature or self.config.get("temperature", 0.7)
             
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=max_new_tokens,
-                    temperature=temperature,
-                    do_sample=True,
-                    top_p=0.9,
-                    pad_token_id=self.tokenizer.eos_token_id
-                )
+            response = self.client.chat.completions.create(
+                model=self.config["model_name"],
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a professional real estate market analyst. Provide accurate, data-driven insights based on the provided context."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=0.9
+            )
             
-            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            return response
+            return response.choices[0].message.content.strip()
             
         except Exception as e:
-            logger.error(f"Error generating response: {e}")
+            logger.error(f"Error generating response from OpenAI: {e}")
             return f"Error generating response: {str(e)}"
 
 class TemporalChunker:
@@ -303,7 +304,7 @@ class RealEstateRAGSystem:
         self.use_llm = use_llm
         if use_llm:
             try:
-                self.llm = TransformersLLM(LLMConfig.FLAN_T5_BASE)
+                self.llm = OpenAILLM(LLMConfig.GPT_3_5_TURBO, openai_client)
             except Exception as e:
                 logger.error(f"Failed to initialize LLM: {e}")
                 self.llm = None
@@ -338,23 +339,23 @@ Answer:"""
             sample_docs = [
                 Document(
                     page_content="Commercial real estate in Manhattan saw a 15% price increase in Q3 2024, driven by return-to-office mandates and foreign investment. Average price per square foot reached $1,250 in prime locations. Office vacancy rates dropped to 12.3%, the lowest since 2020.",
-                    metadata={"source": "Manhattan Market Report", "date": "2024-09-30", "property_type": "commercial", "location": "Manhattan"}
+                    metadata={"source": "Manhattan Market Report", "date": "2024-09-30", "property_type": "commercial", "location": "Manhattan", "url": "https://example.com/manhattan-market-report-q3-2024", "author": "Manhattan Real Estate Institute"}
                 ),
                 Document(
                     page_content="The industrial real estate sector continues to outperform, with warehouse properties near major ports seeing 8% annual appreciation. E-commerce growth drives demand for last-mile delivery facilities. Cap rates for prime industrial assets range from 4.5% to 5.5%.",
-                    metadata={"source": "Industrial Analysis", "date": "2024-10-15", "property_type": "industrial", "location": "National"}
+                    metadata={"source": "Industrial Analysis", "date": "2024-10-15", "property_type": "industrial", "location": "National", "url": "https://example.com/industrial-real-estate-analysis-2024", "author": "National Industrial Research Group"}
                 ),
                 Document(
                     page_content="Residential mortgage rates stabilized at 6.5% in October 2024, leading to a slight uptick in home sales. First-time buyers remain challenged by affordability constraints in major markets. The median home price nationally reached $425,000.",
-                    metadata={"source": "Residential Report", "date": "2024-10-20", "property_type": "residential", "location": "National"}
+                    metadata={"source": "Residential Report", "date": "2024-10-20", "property_type": "residential", "location": "National", "url": "https://example.com/residential-market-report-oct-2024", "author": "National Association of Realtors"}
                 ),
                 Document(
                     page_content="Green building certifications are becoming increasingly important for institutional investors. LEED-certified properties command a 7% premium on average. ESG considerations now factor into 78% of commercial real estate investment decisions.",
-                    metadata={"source": "ESG Report", "date": "2024-10-10", "property_type": "commercial", "focus": "sustainability"}
+                    metadata={"source": "ESG Report", "date": "2024-10-10", "property_type": "commercial", "focus": "sustainability", "url": "https://example.com/esg-real-estate-report-2024", "author": "Green Building Council"}
                 ),
                 Document(
                     page_content="Retail real estate shows signs of recovery with adaptive reuse projects gaining momentum. Mixed-use developments combining retail, office, and residential are attracting significant investment. Experiential retail concepts are driving foot traffic.",
-                    metadata={"source": "Retail Trends", "date": "2024-10-05", "property_type": "retail", "location": "National"}
+                    metadata={"source": "Retail Trends", "date": "2024-10-05", "property_type": "retail", "location": "National", "url": "https://example.com/retail-real-estate-trends-2024", "author": "Retail Property Institute"}
                 )
             ]
             
@@ -569,10 +570,30 @@ Answer:"""
         sources = []
         
         for doc in docs:
-            sources.append({
+            # Extract key metadata
+            metadata = doc.metadata
+            source_name = metadata.get('source', 'Unknown Source')
+            url = metadata.get('url', None)
+            author = metadata.get('author', None)
+            date = metadata.get('date', None)
+            
+            # Format the source entry
+            source_entry = {
+                "title": source_name,
                 "content_preview": doc.page_content[:150] + "...",
-                "metadata": doc.metadata
-            })
+                "url": url,
+                "author": author,
+                "date": date,
+                "metadata": metadata
+            }
+            
+            # Add additional context if available
+            if metadata.get('property_type'):
+                source_entry["property_type"] = metadata['property_type']
+            if metadata.get('location'):
+                source_entry["location"] = metadata['location']
+            
+            sources.append(source_entry)
         
         return sources
 
@@ -620,7 +641,7 @@ async def health_check():
         "database_available": DATABASE_AVAILABLE,
         "rag_system": "ready" if rag_system else "unavailable",
         "llm_status": llm_status,
-        "hf_token_configured": bool(os.getenv('HUGGINGFACE_HUB_TOKEN') or os.getenv('HF_TOKEN')),
+        "openai_configured": bool(os.getenv('OPENAI_API_KEY')),
         "timestamp": datetime.now().isoformat()
     }
 
@@ -736,7 +757,7 @@ if __name__ == "__main__":
         print("🌍 Real Estate RAG System - CLI Mode")
         if rag_system:
             print(f"📊 LLM Status: {'Available' if rag_system.llm and rag_system.llm.available else 'Not Available'}")
-            print(f"🤗 HF Token: {'Configured' if os.getenv('HUGGINGFACE_HUB_TOKEN') or os.getenv('HF_TOKEN') else 'Not Configured'}")
+            print(f"� OpenAI: {'Configured' if os.getenv('OPENAI_API_KEY') else 'Not Configured'}")
             while True:
                 try:
                     question = input("\n💬 Enter your question (or 'exit'): ")
@@ -767,7 +788,7 @@ if __name__ == "__main__":
         # Run FastAPI server
         print(f"🚀 Starting Real Estate RAG System on port {port}")
         print(f"📊 LLM Status: {'Available' if rag_system and rag_system.llm and rag_system.llm.available else 'Not Available'}")
-        print(f"🤗 HF Token: {'Configured' if os.getenv('HUGGINGFACE_HUB_TOKEN') or os.getenv('HF_TOKEN') else 'Not Configured'}")
+        print(f"� OpenAI: {'Configured' if os.getenv('OPENAI_API_KEY') else 'Not Configured'}")
         print(f"🌐 Access the dashboard at http://localhost:{port}")
         
         uvicorn.run(
