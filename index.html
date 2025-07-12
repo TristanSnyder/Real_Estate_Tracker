@@ -158,8 +158,8 @@
                             </span>
                         </div>
                         <div class="flex items-center justify-between">
-                            <span class="text-blue-200">HuggingFace</span>
-                            <span id="hf-status" class="text-sm">
+                            <span class="text-blue-200">OpenAI</span>
+                            <span id="openai-status" class="text-sm">
                                 <i class="fas fa-circle text-yellow-400"></i> Verifying...
                             </span>
                         </div>
@@ -248,7 +248,7 @@
                 updateStatusIndicator('rag-status', health.rag_system === 'ready');
                 updateStatusIndicator('llm-status', health.llm_status === 'ready');
                 updateStatusIndicator('db-status', health.database_available);
-                updateStatusIndicator('hf-status', health.hf_token_configured);
+                updateStatusIndicator('openai-status', health.openai_configured);
                 
                 // Update main status
                 const allGood = health.rag_system === 'ready' && health.llm_status === 'ready';
@@ -271,7 +271,7 @@
                 updateStatusIndicator('rag-status', false);
                 updateStatusIndicator('llm-status', false);
                 updateStatusIndicator('db-status', false);
-                updateStatusIndicator('hf-status', false);
+                updateStatusIndicator('openai-status', false);
             }
         }
 
@@ -444,8 +444,15 @@
                             <div class="mt-2 space-y-2">
                                 ${result.sources.map((source, idx) => `
                                     <div class="text-xs bg-white/10 p-2 rounded">
-                                        <div class="text-blue-200">${source.metadata.source || 'Unknown'}</div>
-                                        <div class="text-white/80">${source.content_preview}</div>
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-blue-200 font-medium">${source.title || source.metadata.source || 'Unknown'}</span>
+                                            ${source.url ? `<a href="${source.url}" target="_blank" rel="noopener noreferrer" class="text-blue-300 hover:text-blue-200 ml-2"><i class="fas fa-external-link-alt"></i></a>` : ''}
+                                        </div>
+                                        ${source.author ? `<div class="text-blue-300 text-xs">by ${source.author}</div>` : ''}
+                                        ${source.date ? `<div class="text-blue-300 text-xs">${source.date}</div>` : ''}
+                                        ${source.property_type ? `<div class="text-blue-300 text-xs">Type: ${source.property_type}</div>` : ''}
+                                        ${source.location ? `<div class="text-blue-300 text-xs">Location: ${source.location}</div>` : ''}
+                                        <div class="text-white/80 mt-1">${source.content_preview}</div>
                                     </div>
                                 `).join('')}
                             </div>
