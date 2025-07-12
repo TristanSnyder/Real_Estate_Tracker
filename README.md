@@ -2,9 +2,7 @@
 
 A comprehensive AI-powered system for tracking global real estate markets, competitor activities, ESG trends, and geopolitical impacts using advanced RAG (Retrieval-Augmented Generation) technology.
 
-**🔗 [Live Dashboard](https://realestatetracker-production.up.railway.app/dashboard)**
-
-![Real Estate Tracker Dashboard](https://via.placeholder.com/800x400/667eea/FFFFFF?text=Real+Estate+Strategy+Tracker)
+** [Live Dashboard](https://realestatetracker-production.up.railway.app/dashboard)**
 
 ## 🚀 Features
 
