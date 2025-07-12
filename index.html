@@ -163,6 +163,22 @@
                                 <i class="fas fa-circle text-yellow-400"></i> Verifying...
                             </span>
                         </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-blue-200">NewsAPI</span>
+                            <span id="newsapi-status" class="text-sm">
+                                <i class="fas fa-circle text-yellow-400"></i> Checking...
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <button 
+                            id="refresh-news-btn" 
+                            class="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors flex items-center justify-center"
+                        >
+                            <i class="fas fa-sync-alt mr-2"></i>
+                            Refresh News
+                        </button>
                     </div>
                 </div>
 
@@ -229,6 +245,9 @@
                     sendQuery();
                 });
             });
+            
+            // Refresh news button
+            document.getElementById('refresh-news-btn').addEventListener('click', refreshNews);
         });
 
         // Update current time
@@ -249,6 +268,7 @@
                 updateStatusIndicator('llm-status', health.llm_status === 'ready');
                 updateStatusIndicator('db-status', health.database_available);
                 updateStatusIndicator('openai-status', health.openai_configured);
+                updateStatusIndicator('newsapi-status', health.newsapi_configured);
                 
                 // Update main status
                 const allGood = health.rag_system === 'ready' && health.llm_status === 'ready';
@@ -272,6 +292,7 @@
                 updateStatusIndicator('llm-status', false);
                 updateStatusIndicator('db-status', false);
                 updateStatusIndicator('openai-status', false);
+                updateStatusIndicator('newsapi-status', false);
             }
         }
 
@@ -445,7 +466,11 @@
                                 ${result.sources.map((source, idx) => `
                                     <div class="text-xs bg-white/10 p-2 rounded">
                                         <div class="flex items-center justify-between">
-                                            <span class="text-blue-200 font-medium">${source.title || source.metadata.source || 'Unknown'}</span>
+                                            <div class="flex items-center">
+                                                <span class="text-blue-200 font-medium">${source.title || source.metadata.source || 'Unknown'}</span>
+                                                ${source.metadata.source_type === 'news_api' ? '<span class="ml-2 px-2 py-1 bg-green-500/30 text-green-200 text-xs rounded-full">LIVE</span>' : ''}
+                                                ${source.metadata.source_type === 'sample' ? '<span class="ml-2 px-2 py-1 bg-blue-500/30 text-blue-200 text-xs rounded-full">SAMPLE</span>' : ''}
+                                            </div>
                                             ${source.url ? `<a href="${source.url}" target="_blank" rel="noopener noreferrer" class="text-blue-300 hover:text-blue-200 ml-2"><i class="fas fa-external-link-alt"></i></a>` : ''}
                                         </div>
                                         ${source.author ? `<div class="text-blue-300 text-xs">by ${source.author}</div>` : ''}
@@ -463,6 +488,42 @@
             
             chatContainer.appendChild(messageDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Refresh news data
+        async function refreshNews() {
+            const refreshBtn = document.getElementById('refresh-news-btn');
+            const originalText = refreshBtn.innerHTML;
+            
+            try {
+                refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Refreshing...';
+                refreshBtn.disabled = true;
+                
+                const response = await fetch('/refresh-news', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    if (result.status === 'success') {
+                        addMessage('assistant', '✅ News data refreshed successfully! Latest real estate articles have been added.');
+                    } else {
+                        addMessage('assistant', '📰 No new articles found. Using current news data.');
+                    }
+                } else {
+                    addMessage('assistant', `❌ Error refreshing news: ${result.detail || 'Unknown error'}`);
+                }
+                
+            } catch (error) {
+                addMessage('assistant', `❌ Error refreshing news: ${error.message}`);
+            } finally {
+                refreshBtn.innerHTML = originalText;
+                refreshBtn.disabled = false;
+            }
         }
 
         // Refresh data periodically
