@@ -1,4 +1,3 @@
-(cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF'
 diff --git a/OPENAI_INTEGRATION_COMPLETE.md b/OPENAI_INTEGRATION_COMPLETE.md
 --- a/OPENAI_INTEGRATION_COMPLETE.md
 +++ b/OPENAI_INTEGRATION_COMPLETE.md
@@ -156,5 +155,3 @@ diff --git a/OPENAI_INTEGRATION_COMPLETE.md b/OPENAI_INTEGRATION_COMPLETE.md
 +- **Production-ready configuration** for Railway deployment
 +
 +**Your system is now ready for immediate deployment and real-world use!** 🚀
-EOF
-)
