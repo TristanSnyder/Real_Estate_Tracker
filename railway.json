@@ -6,7 +6,7 @@
   "deploy": {
     "startCommand": "python -m uvicorn real_estate_rag_system:app --host 0.0.0.0 --port $PORT",
     "healthcheckPath": "/health",
-    "healthcheckTimeout": 100,
+    "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE"
   }
 }
