@@ -112,17 +112,6 @@ A comprehensive AI-powered system for tracking global real estate markets, compe
 │ • Reports       │    │ • File Storage  │
 └─────────────────┘    └─────────────────┘
 ```
-
-## 📚 Documentation
-
-- **[Setup Guide](docs/setup.md)**: Detailed installation instructions
-- **[API Reference](docs/api.md)**: Complete API documentation  
-- **[Architecture](docs/architecture.md)**: System design and components
-- **[Data Sources](docs/data-sources.md)**: Information about data providers
-- **[Troubleshooting](docs/troubleshooting.md)**: Common issues and solutions
-
-
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
