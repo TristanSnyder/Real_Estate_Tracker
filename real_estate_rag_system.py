@@ -841,6 +841,29 @@ import uvicorn
 
 app = FastAPI(title="Real Estate RAG API", version="1.0.0")
 
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "message": "🏠 Real Estate Strategy Tracker API",
+        "status": "running",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "/health",
+            "docs": "/docs", 
+            "query": "/query",
+            "metrics": "/metrics",
+            "trends": "/trends"
+        },
+        "description": "AI-powered global real estate market intelligence"
+    }
+
+@app.get("/favicon.ico")
+async def favicon():
+    """Favicon endpoint to prevent 404s"""
+    return {"message": "No favicon configured"}
+
+
 # Global RAG system instance
 rag_system = None
 
