@@ -3,24 +3,33 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y gcc g++ && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    gcc g++ curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install
+# Copy requirements first (for better Docker caching)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app code
+# Install Python packages in stages (lighter first)
+RUN pip install --no-cache-dir --timeout 300 \
+    fastapi uvicorn[standard] pydantic sqlalchemy psycopg2-binary redis python-dotenv
+
+# Install ML packages separately (these are the heavy ones)
+RUN pip install --no-cache-dir --timeout 600 \
+    torch --index-url https://download.pytorch.org/whl/cpu
+
+RUN pip install --no-cache-dir --timeout 600 \
+    transformers sentence-transformers chromadb
+
+# Install remaining packages
+RUN pip install --no-cache-dir --timeout 300 \
+    scrapy pandas requests beautifulsoup4 celery feedparser yfinance langchain
+
+# Copy application code
 COPY . .
 
 # Create directories
 RUN mkdir -p chroma_db logs
 
-# Railway requires this format for PORT
-EXPOSE $PORT
-
-# Health check (optional but helpful)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:$PORT/health || exit 1
-
-# Start command - make sure it binds to 0.0.0.0
-CMD uvicorn real_estate_rag_system:app --host 0.0.0.0 --port $PORT --workers 1
+# Start command
+CMD uvicorn real_estate_rag_system:app --host 0.0.0.0 --port $PORT
