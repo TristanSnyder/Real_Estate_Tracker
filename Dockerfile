@@ -1,6 +1,14 @@
 FROM python:3.11-slim
+
 WORKDIR /app
-RUN pip install fastapi uvicorn[standard]
+
+RUN apt-get update && apt-get install -y gcc g++ && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
 COPY . .
-EXPOSE 8000
-CMD ["sh", "-c", "uvicorn real_estate_rag_system:app --host 0.0.0.0 --port ${PORT:-8000}"]
+RUN mkdir -p chroma_db logs
+
+# This will work without railway.json
+CMD sh -c "uvicorn real_estate_rag_system:app --host 0.0.0.0 --port ${PORT:-8000}"
